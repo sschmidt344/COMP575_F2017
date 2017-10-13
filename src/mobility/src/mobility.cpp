@@ -31,7 +31,41 @@ using namespace std;
 // Random number generator
 random_numbers::RandomNumberGenerator *rng;
 
+// ------------------------------------------------------------------------------------------------
 
+class Rover {
+private:
+    std::string roverName;
+    pose location;
+
+public:
+    Rover (std::string name, double x, double y, double theta) {
+        roverName = name;
+        setPose(x, y, theta);
+    }
+
+    Rover (std::string name, pose pos);
+
+    void setPose(pose po) {
+        setPose(po.x, po.y, po.theta);
+    }
+
+    void setPose(double x, double y, double theta) {
+        location.x = x;
+        location.y = y;
+        location.theta = theta;
+    }
+
+    double getX() { return location.x; }
+    double getY() { return location.y; }
+    double getTheta() { return location.theta; }
+    pose getPose() { return location; }
+
+};
+
+    std::vector<Rover> roverList;
+
+// ------------------------------------------------------------------------------------------------
 
 string rover_name;
 char host[128];
@@ -60,6 +94,7 @@ ros::Publisher target_collected_publisher;
 ros::Publisher angular_publisher;
 ros::Publisher messagePublish;
 ros::Publisher debug_publisher;
+ros::Publisher posePublish;
 
 //Subscribers
 ros::Subscriber joySubscriber;
@@ -69,6 +104,7 @@ ros::Subscriber obstacleSubscriber;
 ros::Subscriber odometrySubscriber;
 
 ros::Subscriber messageSubscriber;
+ros::Subscriber poseSubscriber;
 
 //Timers
 ros::Timer stateMachineTimer;
@@ -91,6 +127,7 @@ void mobilityStateMachine(const ros::TimerEvent &);
 void publishStatusTimerEventHandler(const ros::TimerEvent &event);
 void killSwitchTimerEventHandler(const ros::TimerEvent &event);
 void messageHandler(const std_msgs::String::ConstPtr &message);
+void poseHandler(const std_msgs::String::ConstPtr &message);
 
 int main(int argc, char **argv)
 {
@@ -120,6 +157,7 @@ int main(int argc, char **argv)
     obstacleSubscriber = mNH.subscribe((rover_name + "/obstacle"), 10, obstacleHandler);
     odometrySubscriber = mNH.subscribe((rover_name + "/odom/ekf"), 10, odometryHandler);
     messageSubscriber = mNH.subscribe(("messages"), 10, messageHandler);
+    poseSubscriber = mNH.subscribe(("poses"), 10, poseHandler);
 
     status_publisher = mNH.advertise<std_msgs::String>((rover_name + "/status"), 1, true);
     velocityPublish = mNH.advertise<geometry_msgs::Twist>((rover_name + "/velocity"), 10);
@@ -132,6 +170,7 @@ int main(int argc, char **argv)
     stateMachineTimer = mNH.createTimer(ros::Duration(mobility_loop_time_step), mobilityStateMachine);
     debug_publisher = mNH.advertise<std_msgs::String>("/debug", 1, true);
     messagePublish = mNH.advertise<std_msgs::String>(("messages"), 10 , true);
+    posePublish = mNH.advertise<std_msgs::String>(("poses"), 10, true);
     
     ros::spin();
     return EXIT_SUCCESS;
@@ -140,6 +179,7 @@ int main(int argc, char **argv)
 void mobilityStateMachine(const ros::TimerEvent &)
 {
     std_msgs::String state_machine_msg;
+    std_msgs::String pose_msg;
 
     if ((simulation_mode == 2 || simulation_mode == 3)) // Robot is in automode
     {
@@ -170,13 +210,21 @@ void mobilityStateMachine(const ros::TimerEvent &)
     else
     { // mode is NOT auto
 
-        // publish current state for the operator to seerotational_controller
+        // publish current state for the operator to see rotational_controller
         std::stringstream converter;
         converter <<"CURRENT MODE: " << simulation_mode;
 
         state_machine_msg.data = "WAITING, " + converter.str();
     }
     stateMachinePublish.publish(state_machine_msg);
+
+    std::stringstream rover_info;
+    rover_info << rover_name << ", ";
+    rover_info << current_location.x << ", ";
+    rover_info << current_location.y << ", ";
+    rover_info << current_location.theta;
+    pose_msg.data = rover_info.str();
+    posePublish.publish(pose_msg);
 }
 
 void setVelocity(double linearVel, double angularVel)
@@ -279,4 +327,9 @@ void sigintEventHandler(int sig)
 
 void messageHandler(const std_msgs::String::ConstPtr& message)
 {
+}
+
+void poseHandler(const std_msgs::String::ConstPtr &message)
+{
+
 }
