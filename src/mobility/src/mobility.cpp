@@ -63,7 +63,12 @@ public:
 
 };
 
-    std::vector<Rover> roverList;
+std::vector<Rover> roverList;
+
+double calculateGlobalAverageHeading() {
+    return (double) accumulate(roverList.begin(), roverList.end(), 0.0) / roverList.size();
+}
+
 
 // ------------------------------------------------------------------------------------------------
 
@@ -95,6 +100,7 @@ ros::Publisher angular_publisher;
 ros::Publisher messagePublish;
 ros::Publisher debug_publisher;
 ros::Publisher posePublish;
+ros::Publisher global_average_heading_publisher;
 
 //Subscribers
 ros::Subscriber joySubscriber;
@@ -105,6 +111,7 @@ ros::Subscriber odometrySubscriber;
 
 ros::Subscriber messageSubscriber;
 ros::Subscriber poseSubscriber;
+ros::Subscriber global_average_heading_subscriber;
 
 //Timers
 ros::Timer stateMachineTimer;
@@ -128,6 +135,7 @@ void publishStatusTimerEventHandler(const ros::TimerEvent &event);
 void killSwitchTimerEventHandler(const ros::TimerEvent &event);
 void messageHandler(const std_msgs::String::ConstPtr &message);
 void poseHandler(const std_msgs::String::ConstPtr &message);
+void global_average_heading_handler(const std_msgs::String::ConstPtr &message);
 
 int main(int argc, char **argv)
 {
@@ -158,6 +166,7 @@ int main(int argc, char **argv)
     odometrySubscriber = mNH.subscribe((rover_name + "/odom/ekf"), 10, odometryHandler);
     messageSubscriber = mNH.subscribe(("messages"), 10, messageHandler);
     poseSubscriber = mNH.subscribe(("poses"), 10, poseHandler);
+    global_average_heading_subscriber = mNH.subscribe("global average heading", 10, global_average_heading_publisher);
 
     status_publisher = mNH.advertise<std_msgs::String>((rover_name + "/status"), 1, true);
     velocityPublish = mNH.advertise<geometry_msgs::Twist>((rover_name + "/velocity"), 10);
@@ -171,6 +180,7 @@ int main(int argc, char **argv)
     debug_publisher = mNH.advertise<std_msgs::String>("/debug", 1, true);
     messagePublish = mNH.advertise<std_msgs::String>(("messages"), 10 , true);
     posePublish = mNH.advertise<std_msgs::String>(("poses"), 10, true);
+    global_average_heading_publisher = mNH.advertise<std_msgs::String>("global average heading", 10, true);
     
     ros::spin();
     return EXIT_SUCCESS;
@@ -331,5 +341,80 @@ void messageHandler(const std_msgs::String::ConstPtr& message)
 
 void poseHandler(const std_msgs::String::ConstPtr &message)
 {
+    string pose_msg = message->data.c_str();
+    string delimiter = ", ";
+    std::string::size_type delimSize = pose_msg.find(delimiter);
+    string name;
+    double x, y, theta;
+    bool nameParsed, xParsed, yParsed, thetaParsed = false;
+
+    // message: "roverName, Xlocation, Ylocation, theta"
+    // get data from message
+    if (!nameParsed && !xParsed && !yParsed && !thetaParsed) {
+        name = pose_msg.substr(0, delimSize);
+        pose_message.erase(0, delimSize + delimiter.length());
+        nameParsed = true;
+    }
+    if (nameParsed && !xParsed && !yParsed && !thetaParsed) {
+        x = pose_msg.substr(0, delimSize);
+        pose_message.erase(0, delimSize + delimiter.length());
+        xParsed = true;
+    }
+    if (nameParsed && xParsed && !yParsed && !thetaParsed) {
+        y = pose_msg.substr(0, delimSize);
+        pose_message.erase(0, delimSize + delimiter.length());
+        yParsed = true;
+    }
+    if (nameParsed && xParsed && yParsed && !thetaParsed) {
+        theta = pose_msg.substr(0, delimSize);
+//        pose_message.erase(0, delimSize + delimiter.length());
+        thetaParsed = true;
+    }
+
+    // update pose or add new rover
+    bool roverFound = false;
+    if (nameParsed && xParsed && yParsed && thetaParsed) {
+        for (int i = 0; i < roverList.size(); i++) {
+            if(roverList[i].roverName.equals(name) && !roverFound) {
+                roverList[i].setPose(x, y, theta);
+                roverFound = true;
+            }
+        }
+        if (!roverFound) {
+            roverList.emplace_back(new Rover(name, x, y, theta));
+        }
+    }
+
+    // update global average heading
+    std_msgs::String gbl_avg_heading_msg;
+    std::stringstream gbl_avg_heading_stream;
+
+    gbl_avg_heading_stream << "Global average heading: " << calculateGlobalAverageHeading();
+    gbl_avg_heading_msg.data = gbl_avg_heading_stream.str();
+
+    global_average_heading_publisher.publish(gbl_avg_heading_msg);
+}
+
+
+void global_average_heading_handler(const std_msgs::String::ConstPtr &message) {
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
