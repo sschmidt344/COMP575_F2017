@@ -56,6 +56,7 @@ public:
         location.theta = theta;
     }
 
+    string getName() { return roverName; }
     double getX() { return location.x; }
     double getY() { return location.y; }
     double getTheta() { return location.theta; }
@@ -66,7 +67,43 @@ public:
 std::vector<Rover> roverList;
 
 double calculateGlobalAverageHeading() {
-    return (double) accumulate(roverList.begin(), roverList.end(), 0.0) / roverList.size();
+    std::vector<doubles> headingList;
+
+    for (int i = 0; i < roverList.size(); i++) {
+        headingList.emplace_back(roverList[i].getTheta());
+    }
+
+    return (double) accumulate(headingList.begin(), headingList.end(), 0.0) / headingList.size();
+}
+
+std::vector<unsigned int> calculateLocalNeighbors(Rover currentRover) {
+    std::vector<unsigned int> localNeighbors;
+    double distance;
+
+    for (int i = 0; i < roverList.size(); i++) {
+        // if not the same rover, calculate if the rover is a local neighbor
+        if (!currentRover.getName().equals(roverList[i].getName())) {
+            // use distance equation here between current rover and rover from list
+            distance = sqrt((curentRover.getX() - roverList[i].getX())^2 + (currentRover.getY() - roverList[i].getY())^2);
+
+            if (distance < 2) {
+                localNeighbors.emplace_back(i);
+            }
+        }
+    }
+    return localNeighbors;
+}
+
+double calculateLocalAverageHeading(Rover currentRover) {
+    std::vector<unsigned int> localNeighbors = calculateLocalNeighbors(currentRover);
+
+    std::vector<doubles> headingList;
+
+    for (int i = 0; i < localNeighbors.size(); i++) {
+        headingList.emplace_back(roverList[localNeighbors].getTheta());
+    }
+
+    return (double) accumulate(headingList.begin(), headingList.end(), 0.0) / headingList.size();
 }
 
 
@@ -101,6 +138,7 @@ ros::Publisher messagePublish;
 ros::Publisher debug_publisher;
 ros::Publisher posePublish;
 ros::Publisher global_average_heading_publisher;
+ros::Publisher local_average_heading_publisher;
 
 //Subscribers
 ros::Subscriber joySubscriber;
@@ -112,6 +150,7 @@ ros::Subscriber odometrySubscriber;
 ros::Subscriber messageSubscriber;
 ros::Subscriber poseSubscriber;
 ros::Subscriber global_average_heading_subscriber;
+ros::Subscriber local_average_heading_subscriber;
 
 //Timers
 ros::Timer stateMachineTimer;
@@ -136,6 +175,7 @@ void killSwitchTimerEventHandler(const ros::TimerEvent &event);
 void messageHandler(const std_msgs::String::ConstPtr &message);
 void poseHandler(const std_msgs::String::ConstPtr &message);
 void global_average_heading_handler(const std_msgs::String::ConstPtr &message);
+void local_average_heading_handler(const std_msgs::String::ConstPtr &message);
 
 int main(int argc, char **argv)
 {
@@ -167,6 +207,7 @@ int main(int argc, char **argv)
     messageSubscriber = mNH.subscribe(("messages"), 10, messageHandler);
     poseSubscriber = mNH.subscribe(("poses"), 10, poseHandler);
     global_average_heading_subscriber = mNH.subscribe("global average heading", 10, global_average_heading_publisher);
+    local_average_heading_subscriber = mNH.subscribe("local average heading", 10, local_average_heading_publisher);
 
     status_publisher = mNH.advertise<std_msgs::String>((rover_name + "/status"), 1, true);
     velocityPublish = mNH.advertise<geometry_msgs::Twist>((rover_name + "/velocity"), 10);
@@ -181,7 +222,8 @@ int main(int argc, char **argv)
     messagePublish = mNH.advertise<std_msgs::String>(("messages"), 10 , true);
     posePublish = mNH.advertise<std_msgs::String>(("poses"), 10, true);
     global_average_heading_publisher = mNH.advertise<std_msgs::String>("global average heading", 10, true);
-    
+    local_average_heading_publisher = mNH.advertise<std_msgs::String>("local average heading", 10, true);
+
     ros::spin();
     return EXIT_SUCCESS;
 }
@@ -393,6 +435,17 @@ void poseHandler(const std_msgs::String::ConstPtr &message)
     gbl_avg_heading_msg.data = gbl_avg_heading_stream.str();
 
     global_average_heading_publisher.publish(gbl_avg_heading_msg);
+
+    // update local average headings for each rover
+    std_msgs::String local_avg_heading_msg;
+    std::stringstream local_avg_heading_stream;
+
+    for (int i = 0; i < roverList.size(); i++) {
+        local_avg_heading_stream << "Local average heading for " << roverList[i].getName() << ": " << calculateLocalAverageHeading(roverList[i]);
+        local_avg_heading_msg.data = local_avg_heading_stream.str();
+
+        local_average_heading_publisher.publish(local_avg_heading_msg);
+    }
 }
 
 
@@ -400,6 +453,9 @@ void global_average_heading_handler(const std_msgs::String::ConstPtr &message) {
 
 }
 
+void local_average_heading_handler(const std_msgs::String::ConstPtr &message) {
+
+}
 
 
 
