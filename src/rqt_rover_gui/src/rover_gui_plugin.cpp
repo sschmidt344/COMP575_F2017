@@ -1080,8 +1080,8 @@ void RoverGUIPlugin::buildSimulationButtonEventHandler()
    return_msg = sim_mgr.startRoverNode("ajax");
    displayLogMessage(return_msg);
 
-    progress_dialog.setValue((++n_rovers_created)*100.0f/n_rovers);
-    qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
+   progress_dialog.setValue((++n_rovers_created)*100.0f/n_rovers);
+   qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
 
    if (ui.final_radio_button->isChecked())
    {
