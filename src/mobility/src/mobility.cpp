@@ -176,10 +176,7 @@ void mobilityStateMachine(const ros::TimerEvent &)
             case STATE_MACHINE_TRANSLATE:
             {
                 state_machine_msg.data = "TRANSLATING";//, " + converter.str();
-//                float angular_velocity = 0.2;
-                float angular_velocity = 0.5 * (calculate_local_average_heading() - current_location.theta);
-                // increasing angular_velocity makes the rovers overcorrect and creates too much movement when they are stationary
-//                float angular_velocity = 1.5 * (calculate_local_average_heading() - current_location.theta);
+                float angular_velocity = 0.2;
                 float linear_velocity = 0.01; // it's easier to see them adjust heading when they move a little
                 setVelocity(linear_velocity, angular_velocity);
                 break;
