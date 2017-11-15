@@ -68,6 +68,8 @@ ros::Publisher debug_publisher;
 ros::Publisher posePublisher;
 ros::Publisher globalAverageHeadingPublisher;
 ros::Publisher localAverageHeadingPublisher;
+ros::Publisher globalAveragePositionPublisher;
+ros::Publisher localAveragePositionPublisher;
 
 //Subscribers
 ros::Subscriber joySubscriber;
@@ -105,10 +107,12 @@ string get_rover_name_from_message (string msg);
 pose get_pose_from_message (string msg);
 void parse_pose_message(string msg);
 float calculate_global_average_heading();
+float calculate_global_average_position();
 float calculate_local_average_heading();
+float calculate_local_average_position();
 void calculate_neighbors(string rover_name);
 
-vector <pose> neighbors(6);
+vector <pose> neighbors;
 vector <pose> all_rovers(6);
 
 int main(int argc, char **argv)
@@ -154,6 +158,8 @@ int main(int argc, char **argv)
     posePublisher = mNH.advertise<std_msgs::String>(("poses"), 10, true);
     globalAverageHeadingPublisher = mNH.advertise<std_msgs::Float32>((rover_name + "/global_average_heading"), 1, true);
     localAverageHeadingPublisher = mNH.advertise<std_msgs::Float32>((rover_name + "/local_average_heading"), 1, true);
+    globalAveragePositionPublisher = mNH.advertise<std_msgs::Float32>((rover_name + "/global_average_position"), 1, true);
+    localAveragePositionPublisher = mNH.advertise<std_msgs::Float32>((rover_name + "/local_average_position"), 1, true);
 
     ros::spin();
     return EXIT_SUCCESS;
@@ -176,11 +182,16 @@ void mobilityStateMachine(const ros::TimerEvent &)
             case STATE_MACHINE_TRANSLATE:
             {
                 state_machine_msg.data = "TRANSLATING";//, " + converter.str();
-//                float angular_velocity = 0.2;
-                float angular_velocity = 0.5 * (calculate_local_average_heading() - current_location.theta);
-                // increasing angular_velocity makes the rovers overcorrect and creates too much movement when they are stationary
-//                float angular_velocity = 1.5 * (calculate_local_average_heading() - current_location.theta);
-                float linear_velocity = 0.01; // it's easier to see them adjust heading when they move a little
+
+                /*
+                 * Notes:
+                 *
+                 * The agents usually separate into 2-3 groups but are never really alone for long.
+                 * When putting them in a large hexagon, they spin around for a bit before picking a
+                 * direction.
+                 */
+                float angular_velocity = 0.5 * (calculate_local_average_position() - current_location.theta);
+                float linear_velocity = 0.04;
                 setVelocity(linear_velocity, angular_velocity);
                 break;
             }
@@ -244,24 +255,35 @@ void poseHandler(const std_msgs::String::ConstPtr& message)
 
     parse_pose_message(msg);
 
-
     float gah = calculate_global_average_heading();
+    float global_avg_pos = calculate_global_average_position();
 
     calculate_neighbors(rover_name);
     float lah = calculate_local_average_heading();
+    float local_avg_pos = calculate_local_average_position();
 
     std::stringstream converter;
-    converter << msg << ", " << rover_name << ", Global Average Heading: "
-              << gah << ", Local Average Heading: " << lah;
+    converter << msg << ", " << rover_name << ", Global Average Heading: " << gah
+              << ", Local Average Heading: " << lah
+              << ", Global Average Position: " << global_avg_pos
+              << ", Local Average Position: " << local_avg_pos;
     output_message.data = converter.str();
     debug_publisher.publish(output_message);
 
     std_msgs::Float32 gah_message;
     std_msgs::Float32 lah_message;
+    std_msgs::Float32 gap_message;
+    std_msgs::Float32 lap_message;
+
     gah_message.data = gah;
     lah_message.data = lah;
+    gap_message.data = global_avg_pos;
+    lap_message.data = local_avg_pos;
+
     globalAverageHeadingPublisher.publish(gah_message);
     localAverageHeadingPublisher.publish(lah_message);
+    globalAveragePositionPublisher.publish(gap_message);
+    localAveragePositionPublisher.publish(lap_message);
 }
 
 void obstacleHandler(const std_msgs::UInt8::ConstPtr &message)
@@ -406,6 +428,21 @@ float calculate_global_average_heading(){
     return global_average_heading;
 }
 
+float calculate_global_average_position() {
+    float u_x = 0;
+    float u_y = 0;
+    float global_average_position;
+    for (int i = 0; i < all_rovers.size(); i++){
+        u_x += cos(all_rovers[i].x);
+        u_y += sin(all_rovers[i].y);
+    }
+    u_x = u_x / all_rovers.size();
+    u_y = u_y / all_rovers.size();
+
+    global_average_position = atan2(u_y,u_x);
+    return global_average_position;
+}
+
 void calculate_neighbors(string rover_name){
     pose my_pose;
     int my_index;
@@ -429,7 +466,7 @@ void calculate_neighbors(string rover_name){
         my_index = 5;
     } else {
         my_pose = all_rovers[0];
-//        cout << "We missed something.";
+        my_index = 0;
     }
     neighbors.clear();
     for (int i = 0; i < all_rovers.size(); i++){
@@ -441,7 +478,7 @@ void calculate_neighbors(string rover_name){
     }
 }
 
-float calculate_local_average_heading(){
+float calculate_local_average_heading() {
     float u_x=0;
     float u_y=0;
     float local_average_heading;
@@ -452,3 +489,37 @@ float calculate_local_average_heading(){
     local_average_heading = atan2(u_y,u_x);
     return local_average_heading;
 }
+
+float calculate_local_average_position() {
+    float u_x = 0;
+    float u_y = 0;
+    float local_average_position;
+
+    // calculate_local_average_position
+    for (int i = 0; i < neighbors.size(); i++) {
+        u_x += neighbors[i].x;
+        u_y += neighbors[i].y;
+    }
+    if (neighbors.size() != 0) {
+        u_x = u_x / neighbors.size();
+        u_y = u_y / neighbors.size();
+
+        local_average_position = atan2(u_y, u_x);
+
+    } else {
+        local_average_position = calculate_global_average_position();
+    }
+    return local_average_position;
+
+}
+
+
+
+
+
+
+
+
+
+
+
