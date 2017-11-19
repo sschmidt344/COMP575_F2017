@@ -184,11 +184,12 @@ void mobilityStateMachine(const ros::TimerEvent &)
                 state_machine_msg.data = "TRANSLATING";//, " + converter.str();
 
                 /*
-                 * Notes:
+                 * Notes as of November 19:
                  *
-                 * The agents usually separate into 2-3 groups but are never really alone for long.
-                 * When putting them in a large hexagon, they spin around for a bit before picking a
-                 * direction.
+                 * In most cases the agents head in the same direction, but if they start far enough apart,
+                 * like in the large hexagon formation, they may separate into 2 groups but will
+                 * still follow the same direction within the same group.
+                 * 
                  */
                 float angular_velocity = 0.5 * (calculate_local_average_position() - current_location.theta);
                 float linear_velocity = 0.04;
@@ -493,21 +494,18 @@ float calculate_local_average_heading() {
 float calculate_local_average_position() {
     float u_x = 0;
     float u_y = 0;
-    float local_average_position;
+    float local_average_position = 0;
 
     // calculate_local_average_position
     for (int i = 0; i < neighbors.size(); i++) {
-        u_x += neighbors[i].x;
-        u_y += neighbors[i].y;
+        u_x += (neighbors[i].x - current_location.x);
+        u_y += (neighbors[i].y - current_location.y);
     }
     if (neighbors.size() != 0) {
-        u_x = u_x / neighbors.size();
-        u_y = u_y / neighbors.size();
+        u_x = (u_x / neighbors.size()) + current_location.x;
+        u_y = (u_y / neighbors.size()) + current_location.y;
 
         local_average_position = atan2(u_y, u_x);
-
-    } else {
-        local_average_position = calculate_global_average_position();
     }
     return local_average_position;
 
