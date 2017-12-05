@@ -38,6 +38,20 @@ random_numbers::RandomNumberGenerator *rng;
 
 
 
+
+enum leader {false_, true_, unknown_};
+
+struct processor_state {
+    int my_id;
+    int max_id;
+    leader leader_;
+    float round;
+};
+
+int max_iterations = 6;
+
+
+
 string rover_name;
 char host[128];
 bool is_published_name = false;
@@ -103,6 +117,17 @@ void killSwitchTimerEventHandler(const ros::TimerEvent &event);
 void messageHandler(const std_msgs::String::ConstPtr &message);
 void poseHandler(const std_msgs::String::ConstPtr &message);
 
+int msg(processor_state processor_state1, int index); // message generation function
+processor_state stf(processor_state processor_state1, int y); // standard message generation function
+
+ros::Publisher messageGenerationPublisher;
+ros::Publisher standardMessageGenerationPublisher;
+
+ros::Subscriber messageGenerationSubscriber;
+ros::Subscriber standardMessageGenerationSubscriber;
+
+
+
 string get_rover_name_from_message (string msg);
 pose get_pose_from_message (string msg);
 void parse_pose_message(string msg);
@@ -148,6 +173,11 @@ int main(int argc, char **argv)
     odometrySubscriber = mNH.subscribe((rover_name + "/odom/ekf"), 10, odometryHandler);
     messageSubscriber = mNH.subscribe(("messages"), 10, messageHandler);
     poseSubscriber = mNH.subscribe(("poses"), 10, poseHandler);
+
+    messageGenerationSubscriber = mNH.subscribe(("msg"), 10, msg);
+    standardMessageGenerationSubscriber = mnH.subscribe(("stf"), 10, stf);
+
+    
 
     status_publisher = mNH.advertise<std_msgs::String>((rover_name + "/status"), 1, true);
     velocityPublish = mNH.advertise<geometry_msgs::Twist>((rover_name + "/velocity"), 10);
@@ -515,6 +545,34 @@ float calculate_local_average_position() {
 
 }
 
+int msg(processor_state processor_state1, int index) {
+
+    if (processor_state1.round < 4) {
+        return processor_state1.max_id;
+    } else {
+        return null;
+    }
+
+}
+
+processor_state stf(processor_state processor_state1, int y) {
+
+    processor_state processor_state_temp = processor_state1;
+
+    int new_id = std::max(processor_state_temp.max_id, y);
+
+    if (processor_state_temp.round < max_iterations) {
+        processor_state_temp.leader_ = unknown_;
+    } else if (processor_state_temp.round == max_iterations
+               && processor_state_temp.max_id == processor_state_temp.my_id) {
+        processor_state_temp.leader_ = true_;
+    } else if (processor_state_temp.round == max_iterations
+               && processor_state_temp.max_id > processor_state_temp.my_id) {
+        processor_state_temp.leader_ = false_;
+    }
+    return processor_state_temp;
+
+}
 
 
 
