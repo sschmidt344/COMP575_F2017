@@ -111,10 +111,10 @@ float calculate_global_average_position();
 float calculate_local_average_heading();
 float calculate_local_average_position();
 void calculate_neighbors(string rover_name);
+float calculate_offset_d_heading();
+float common_point_heading();
 
-float local_avg_position;
-
-
+float our_north = 0;
 
 vector <pose> neighbors;
 vector <pose> all_rovers(6);
@@ -187,14 +187,14 @@ void mobilityStateMachine(const ros::TimerEvent &)
             {
                 state_machine_msg.data = "TRANSLATING";//, " + converter.str();
 
-                /*
-                 * Notes as of December 4:
-                 *
-                 * The agents head in the same direction and stay close together.
-                 *
-                 */
-                float angular_velocity = 0.2 * (local_avg_position - current_location.theta);
-                float linear_velocity = 0.02;
+
+                float angular_velocity;
+                float linear_velocity;
+
+                // to agree on common direction
+                angular_velocity = 0.03 * ((calculate_local_average_heading() + current_location.theta) / 2);
+                linear_velocity = 0;
+
                 setVelocity(linear_velocity, angular_velocity);
                 break;
             }
@@ -264,8 +264,6 @@ void poseHandler(const std_msgs::String::ConstPtr& message)
     calculate_neighbors(rover_name);
     float lah = calculate_local_average_heading();
     float local_avg_pos = calculate_local_average_position();
-
-    local_avg_position = local_avg_pos;
 
     std::stringstream converter;
     converter << msg << ", " << rover_name << ", Global Average Heading: " << gah
@@ -476,7 +474,7 @@ void calculate_neighbors(string rover_name){
     neighbors.clear();
     for (int i = 0; i < all_rovers.size(); i++){
         if(i != my_index){
-            if(hypot(my_pose.x - all_rovers[i].x, my_pose.y - all_rovers[i].y) <= 2) {
+            if(hypot(my_pose.x - all_rovers[i].x, my_pose.y - all_rovers[i].y) < 2) {
                 neighbors.push_back(all_rovers[i]);
             }
         }
@@ -506,14 +504,51 @@ float calculate_local_average_position() {
         u_y += (neighbors[i].y - current_location.y);
     }
     if (neighbors.size() != 0) {
-        u_x = current_location.x + (u_x / neighbors.size());
-        u_y = current_location.y + (u_y / neighbors.size());
+        u_x = (u_x / neighbors.size()) + current_location.x;
+        u_y = (u_y / neighbors.size()) + current_location.y;
 
         local_average_position = atan2(u_y, u_x);
     }
     return local_average_position;
 
 }
+
+float hexagon(string rover_name){
+    if(rover_name.compare("ajax") == 0){
+        return our_north;
+    } else if (rover_name.compare("aeneas") == 0){
+        return our_north + cos()
+    } else if (rover_name.compare("achilles") == 0){
+        my_pose = all_rovers[2];
+        my_index = 2;
+    } else if (rover_name.compare("diomedes") == 0){
+        my_pose = all_rovers[3];
+        my_index = 3;
+    } else if (rover_name.compare("hector") == 0){
+        my_pose = all_rovers[4];
+        my_index = 4;
+    } else if (rover_name.compare("paris") == 0){
+    } else {
+        my_pose = all_rovers[0];
+        my_index = 0;
+    }
+    neighbors.clear();
+    for (int i = 0; i < all_rovers.size(); i++){
+        if(i != my_index){
+            if(hypot(my_pose.x - all_rovers[i].x, my_pose.y - all_rovers[i].y) < 2) {
+                neighbors.push_back(all_rovers[i]);
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+
 
 
 
