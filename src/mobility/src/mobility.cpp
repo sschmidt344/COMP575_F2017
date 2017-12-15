@@ -110,13 +110,20 @@ float calculate_global_average_heading();
 float calculate_global_average_position();
 float calculate_local_average_heading();
 float calculate_local_average_position();
+float calculate_separation();
+
+float calculate_norm();
+
 void calculate_neighbors(string rover_name);
+void calculate_too_close_neighbors(string rover_name);
 
-float local_avg_position;
-
-
+float local_avg_position; // cohesion
+float local_avg_heading; // alignment
+float separation_heading; // separation
+float norm_;
 
 vector <pose> neighbors;
+vector <pose> too_close_neighbors;
 vector <pose> all_rovers(6);
 
 int main(int argc, char **argv)
@@ -188,13 +195,23 @@ void mobilityStateMachine(const ros::TimerEvent &)
                 state_machine_msg.data = "TRANSLATING";//, " + converter.str();
 
                 /*
-                 * Notes as of December 4:
+                 * Notes as of December 15:
                  *
-                 * The agents head in the same direction and stay close together.
+                 * The agents head in the same direction and stay close together and do not collide
+                 * with each other. Tuning constants have been tested multiple times, seems to work.
                  *
                  */
-                float angular_velocity = 0.2 * (local_avg_position - current_location.theta);
-                float linear_velocity = 0.02;
+                float angular_velocity;
+                if (norm_ != 0) {
+                    angular_velocity = 0.5 * (local_avg_position - current_location.theta) / norm_ +
+                                       0.3 * (local_avg_heading - current_location.theta) / norm_ +
+                                       0.05 * (separation_heading - current_location.theta) / norm_;
+                } else {
+                    angular_velocity = 0.5 * (local_avg_position - current_location.theta) +
+                                       0.3 * (local_avg_heading - current_location.theta) +
+                                       0.05 * (separation_heading - current_location.theta);
+                }
+                float linear_velocity = 0.05;
                 setVelocity(linear_velocity, angular_velocity);
                 break;
             }
@@ -262,10 +279,16 @@ void poseHandler(const std_msgs::String::ConstPtr& message)
     float global_avg_pos = calculate_global_average_position();
 
     calculate_neighbors(rover_name);
-    float lah = calculate_local_average_heading();
-    float local_avg_pos = calculate_local_average_position();
+    calculate_too_close_neighbors(rover_name);
+    float lah = calculate_local_average_heading(); // alignment
+    float local_avg_pos = calculate_local_average_position(); // cohesion
+    float separation = calculate_separation(); // separation
+
+    norm_ = calculate_norm();
 
     local_avg_position = local_avg_pos;
+    local_avg_heading = lah;
+    separation_heading = separation;
 
     std::stringstream converter;
     converter << msg << ", " << rover_name << ", Global Average Heading: " << gah
@@ -483,6 +506,41 @@ void calculate_neighbors(string rover_name){
     }
 }
 
+void calculate_too_close_neighbors(string rover_name){
+    pose my_pose;
+    int my_index;
+    if(rover_name.compare("ajax") == 0){
+        my_pose = all_rovers[0];
+        my_index = 0;
+    } else if (rover_name.compare("aeneas") == 0){
+        my_pose = all_rovers[1];
+        my_index = 1;
+    } else if (rover_name.compare("achilles") == 0){
+        my_pose = all_rovers[2];
+        my_index = 2;
+    } else if (rover_name.compare("diomedes") == 0){
+        my_pose = all_rovers[3];
+        my_index = 3;
+    } else if (rover_name.compare("hector") == 0){
+        my_pose = all_rovers[4];
+        my_index = 4;
+    } else if (rover_name.compare("paris") == 0){
+        my_pose = all_rovers[5];
+        my_index = 5;
+    } else {
+        my_pose = all_rovers[0];
+        my_index = 0;
+    }
+    too_close_neighbors.clear();
+    for (int i = 0; i < all_rovers.size(); i++){
+        if(i != my_index){
+            if(hypot(my_pose.x - all_rovers[i].x, my_pose.y - all_rovers[i].y) <= 0.01) {
+                too_close_neighbors.push_back(all_rovers[i]);
+            }
+        }
+    }
+}
+
 float calculate_local_average_heading() {
     float u_x=0;
     float u_y=0;
@@ -515,9 +573,32 @@ float calculate_local_average_position() {
 
 }
 
+float calculate_separation() {
+    float u_x = 0;
+    float u_y = 0;
+    float separation = 0;
 
+    // calculate_local_average_position
+    for (int i = 0; i < too_close_neighbors.size(); i++) {
+        u_x += (too_close_neighbors[i].x - current_location.x);
+        u_y += (too_close_neighbors[i].y - current_location.y);
+    }
+    if (too_close_neighbors.size() != 0) {
+        u_x = current_location.x + (u_x / too_close_neighbors.size());
+        u_y = current_location.y + (u_y / too_close_neighbors.size());
 
+        separation = -1 * atan2(u_y, u_x);
+    }
+    return separation;
 
+}
+
+float calculate_norm() {
+    return sqrt(
+            (local_avg_heading * local_avg_heading) +
+            (local_avg_position * local_avg_position) +
+            (separation_heading * separation_heading));
+}
 
 
 
